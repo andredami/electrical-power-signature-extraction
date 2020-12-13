@@ -262,28 +262,30 @@ def build_house_db(TARGET_HOUSE, DATASET):
             band_counts = band_counts + [(i, len(aggregate_bands(pd.DataFrame({'Power': channel}), 'Power', np.array(bands), joining_threshold=i)['Band'].unique()))]
 
         x, y = zip(*band_counts)
-
+        
         kneedle = KneeLocator(x, y, curve="convex", direction="decreasing")
+        
+        if kneedle.knee != None:
+            optimal_threshold = kneedle.knee
 
-        optimal_threshold = kneedle.knee
-        optimal_threshold
+            x, y = zip(*band_counts)
 
-        x, y = zip(*band_counts)
-
-        fig = plt.figure()
-        fig.subplots_adjust(top=0.8)
-        axes = fig.add_subplot(1,1,1)
-        axes.set_title('Band-merging Threshold Exploration')
-        axes.set_xlabel('threshold')
-        axes.set_ylabel('number of bands')
-        axes.plot(x, y, label=TARGET_CHANNEL_NAME)
-        axes.vlines(optimal_threshold, min(map(lambda x: x[1],band_counts)), max(map(lambda x: x[1],band_counts)), linestyles='dashed', colors='red', label='elbow point')
-        axes.legend()
-        axes.minorticks_on()
-        axes.grid(which='both')
-        plt.savefig(channel_plots / "elbow_point.png", facecolor='white')
-  
-        opt_banded_channel = aggregate_bands(pd.DataFrame({'Power': channel}), 'Power', np.array(bands), joining_threshold = optimal_threshold)
+            fig = plt.figure()
+            fig.subplots_adjust(top=0.8)
+            axes = fig.add_subplot(1,1,1)
+            axes.set_title('Band-merging Threshold Exploration')
+            axes.set_xlabel('threshold')
+            axes.set_ylabel('number of bands')
+            axes.plot(x, y, label=TARGET_CHANNEL_NAME)
+            axes.vlines(optimal_threshold, min(map(lambda x: x[1],band_counts)), max(map(lambda x: x[1],band_counts)), linestyles='dashed', colors='red', label='elbow point')
+            axes.legend()
+            axes.minorticks_on()
+            axes.grid(which='both')
+            plt.savefig(channel_plots / "elbow_point.png", facecolor='white')
+    
+            opt_banded_channel = aggregate_bands(pd.DataFrame({'Power': channel}), 'Power', np.array(bands), joining_threshold = optimal_threshold)
+        else:
+            opt_banded_channel = aggregate_bands(pd.DataFrame({'Power': channel}), 'Power', np.array(bands), joining_threshold = 1)
 
         fig = plt.figure()
         fig.subplots_adjust(top=0.8)
@@ -559,13 +561,15 @@ def build_house_db(TARGET_HOUSE, DATASET):
 
     #Parallel(n_jobs=num_cores)(delayed(generate_channel_graphs)(channel, PLOTS) for channel in target_channels)
 
-    for channel in tqdm(target_channels, 'Channel Plots (' + TARGET_HOUSE +')'):
-        generate_channel_graphs(channel, PLOTS)
+    #for channel in tqdm(target_channels, 'Channel Plots (' + TARGET_HOUSE +')'):
+    #    generate_channel_graphs(channel, PLOTS)
 
 
-    selected_channels = labels[~labels[1].isin(["mains", "kitchen_outlets", "bathroom_gfi", "outlets_unknown", "miscellaeneous", "subpanel"])]
-    target_channels = (
-        selected_channels[1] + '@' + selected_channels.index.astype(str)).tolist()
+    #selected_channels = labels[~labels[1].isin(["mains", "kitchen_outlets", "bathroom_gfi", "outlets_unknown", "miscellaeneous", "subpanel"])]
+    #target_channels = (
+    #    selected_channels[1] + '@' + selected_channels.index.astype(str)).tolist()
+
+    target_channels = ["dishwaser@15", "lighting@13", "lighting@18", "lighting@19"]
 
     #Parallel(n_jobs=num_cores)(delayed(process_single_channel)(TARGET_CHANNEL_NAME, channels[TARGET_CHANNEL_NAME], PLOTS) for TARGET_CHANNEL_NAME in target_channels)
 
