@@ -459,57 +459,60 @@ def build_house_db(TARGET_HOUSE, DATASET):
 
         signatures = signature_traces.loc[signature_traces['Candidate_ID'].isin(signature_cadidate_ids)].groupby('Candidate_ID')
 
-        def fix_index(candidate_signature):
-            start = candidate_signature.index.min()
-            candidate_signature.index = [pd.to_timedelta(v).seconds for v in [i - start for i in candidate_signature.index.values]]
-            return candidate_signature
+        if len(signature_cadidate_ids) <= 1:
+            definitive_signatures_candidate_id = signature_cadidate_ids
+        else:
+            def fix_index(candidate_signature):
+                start = candidate_signature.index.min()
+                candidate_signature.index = [pd.to_timedelta(v).seconds for v in [i - start for i in candidate_signature.index.values]]
+                return candidate_signature
 
-        def dwt_dist(candidate_id_x, candidate_id_y):
-            source = fix_index(signatures.get_group(int(candidate_id_y)))['Power']
-            reference = fix_index(signatures.get_group(int(candidate_id_x)))['Power']
-            return float(dtw(source, reference, distance_only=True).distance)
+            def dwt_dist(candidate_id_x, candidate_id_y):
+                source = fix_index(signatures.get_group(int(candidate_id_y)))['Power']
+                reference = fix_index(signatures.get_group(int(candidate_id_x)))['Power']
+                return float(dtw(source, reference, distance_only=True).distance)
 
-        def len_dist(candidate_id_x, candidate_id_y):
-            source = fix_index(signatures.get_group(int(candidate_id_y)))['Power']
-            reference = fix_index(signatures.get_group(int(candidate_id_x)))['Power']
-            return float(abs(len(source) - len(reference)))
+            def len_dist(candidate_id_x, candidate_id_y):
+                source = fix_index(signatures.get_group(int(candidate_id_y)))['Power']
+                reference = fix_index(signatures.get_group(int(candidate_id_x)))['Power']
+                return float(abs(len(source) - len(reference)))
 
-        X = np.array(signature_cadidate_ids).reshape(-1, 1)
+            X = np.array(signature_cadidate_ids).reshape(-1, 1)
 
-        def normalize(array):
-            return (array - np.min(array)) / np.ptp(array)
+            def normalize(array):
+                return (array - np.min(array)) / np.ptp(array)
 
-        m1 = normalize(pairwise_distances(X, X, metric=dwt_dist))
-        m2 = normalize(pairwise_distances(X, X, metric=len_dist))
-        m =  0.4*m1 + 0.6*m2
+            m1 = normalize(pairwise_distances(X, X, metric=dwt_dist))
+            m2 = normalize(pairwise_distances(X, X, metric=len_dist))
+            m =  0.4*m1 + 0.6*m2
 
-        s = list()
+            s = list()
 
-        for nc in tqdm(range(2, len(X)), 'clusters'):
-            agg = AgglomerativeClustering(n_clusters=nc, affinity='precomputed',
-                                    linkage='average')
+            for nc in tqdm(range(2, len(X)), 'clusters'):
+                agg = AgglomerativeClustering(n_clusters=nc, affinity='precomputed',
+                                        linkage='average')
 
+                u = agg.fit_predict(m)
+                s.append(silhouette_score(m, u, metric="precomputed"))
+
+            plt.plot(list(range(2, len(X))), s)
+
+            optimal_threshold_sig = np.argmax(s) + 2
+
+            agg = AgglomerativeClustering(n_clusters=optimal_threshold_sig, affinity='precomputed',
+                                        linkage='average')
             u = agg.fit_predict(m)
-            s.append(silhouette_score(m, u, metric="precomputed"))
+            u
 
-        plt.plot(list(range(2, len(X))), s)
+            definitive_signatures_candidate_id = list()
 
-        optimal_threshold_sig = np.argmax(s) + 2
-
-        agg = AgglomerativeClustering(n_clusters=optimal_threshold_sig, affinity='precomputed',
-                                    linkage='average')
-        u = agg.fit_predict(m)
-        u
-
-        definitive_signatures_candidate_id = list()
-
-        for cluster in range(0, optimal_threshold_sig):
-            cond = u == cluster
-            group = np.array(m1)[cond][:, cond]
-            best = np.argmin(group.sum(axis=0))
-            idx = np.searchsorted(np.cumsum(cond), best + 1)
-            candidate_id = signature_cadidate_ids[idx]
-            definitive_signatures_candidate_id.append(candidate_id)
+            for cluster in range(0, optimal_threshold_sig):
+                cond = u == cluster
+                group = np.array(m1)[cond][:, cond]
+                best = np.argmin(group.sum(axis=0))
+                idx = np.searchsorted(np.cumsum(cond), best + 1)
+                candidate_id = signature_cadidate_ids[idx]
+                definitive_signatures_candidate_id.append(candidate_id)
 
         definitive_signatures = signature_traces.loc[signature_traces['Candidate_ID'].isin(definitive_signatures_candidate_id)].groupby('Candidate_ID')
 
@@ -540,7 +543,13 @@ def build_house_db(TARGET_HOUSE, DATASET):
             definitive_signature.index = [fix_index(v) for v in definitive_signature.index]
 
             resampled_signature = definitive_signature['Power'].resample('10S').ffill(limit=1).interpolate()
-            resampled_signature = resampled_signature.append(pd.Series([0], index=[resampled_signature.index.max() + resampled_signature.index[1] - resampled_signature.index[0]]))
+            
+            if len(resampled_signature.index) > 1:
+                last_index = resampled_signature.index.max() + resampled_signature.index[1] - resampled_signature.index[0]
+            else:
+                last_index = pd.Timedelta(value=10, unit='S')
+
+            resampled_signature = resampled_signature.append(pd.Series([0], index=[last_index]))
 
             plt.plot([pd.to_timedelta(v).seconds for v in resampled_signature.index.values], resampled_signature)
             np.savetxt(signature_db / (str(idx) + '.dat'), resampled_signature.to_numpy(), delimiter=",")
