@@ -7,7 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import datetime
 import math
-import multiprocessing
+#import multiprocessing
 from multiprocessing import current_process
 from joblib import Parallel, delayed
 from tqdm import trange, tqdm
@@ -47,7 +47,7 @@ def _get_agg_font(self, prop):
 
     return font
 
-num_cores = multiprocessing.cpu_count()
+#num_cores = multiprocessing.cpu_count()
 matplotlib.use('agg')
 
 def setupPlt():
@@ -383,14 +383,16 @@ def build_house_db(TARGET_HOUSE, DATASET):
                 candidate_signature.index = [pd.to_timedelta(v).seconds for v in [i - start for i in candidate_signature.index.values]]
                 return candidate_signature
 
-            for (r, c), _ in tqdm(np.ndenumerate(target_dissimilarity_matrix), 'dissimilarity matrix', total=target_dissimilarity_matrix.size):
-                source = fix_index(target_candidates.get_group(candidate_ids[r]))['Power']
-                reference = fix_index(target_candidates.get_group(candidate_ids[c]))['Power']
-                target_dissimilarity_matrix[r, c] = dtw(source, reference, distance_only=True).distance
-
-            target_dissimilarity_matrix
-
-            minimizing_signature_id = np.argmin(np.sum(target_dissimilarity_matrix, axis=0))
+            if (len(target_candidates) <= 1):
+                target_dissimilarity_matrix[0,0] = 0
+                minimizing_signature_id = 0
+            else:
+                for (r, c), _ in tqdm(np.ndenumerate(target_dissimilarity_matrix), 'dissimilarity matrix', total=target_dissimilarity_matrix.size):
+                    source = fix_index(target_candidates.get_group(candidate_ids[r]))['Power']
+                    reference = fix_index(target_candidates.get_group(candidate_ids[c]))['Power']
+                    target_dissimilarity_matrix[r, c] = dtw(source, reference, distance_only=True).distance
+                target_dissimilarity_matrix
+                minimizing_signature_id = np.argmin(np.sum(target_dissimilarity_matrix, axis=0))
 
             signature = signature_traces.loc[signature_traces['Candidate_ID'] == candidate_ids[minimizing_signature_id]]
 
@@ -423,34 +425,35 @@ def build_house_db(TARGET_HOUSE, DATASET):
             fig.clf()
             plt.close()
 
-            dmfig, ax = plt.subplots()
-            plt.suptitle(TARGET_CHANNEL_NAME)
-            im = ax.pcolor(target_dissimilarity_matrix)
+            if len(target_candidates) >= 1:
+                dmfig, ax = plt.subplots()
+                plt.suptitle(TARGET_CHANNEL_NAME)
+                im = ax.pcolor(target_dissimilarity_matrix)
 
-            # We want to show all ticks...
-            ax.set_xticks(np.arange(len(candidate_ids)))
-            ax.set_yticks(np.arange(len(candidate_ids)))
-            # ... and label them with the respective list entries
-            ax.set_xticklabels(candidate_ids)
-            ax.set_yticklabels(candidate_ids)
+                # We want to show all ticks...
+                ax.set_xticks(np.arange(len(candidate_ids)))
+                ax.set_yticks(np.arange(len(candidate_ids)))
+                # ... and label them with the respective list entries
+                ax.set_xticklabels(candidate_ids)
+                ax.set_yticklabels(candidate_ids)
 
-            # Rotate the tick labels and set their alignment.
-            plt.setp(ax.get_xticklabels(), rotation=90, ha="right",
-                    rotation_mode="anchor")
+                # Rotate the tick labels and set their alignment.
+                plt.setp(ax.get_xticklabels(), rotation=90, ha="right",
+                        rotation_mode="anchor")
 
-            # Loop over data dimensions and create text annotations.
-            # for i in tnrange(len(candidate_ids)):
-            #    for j in range(len(candidate_ids)):
-            #        text = ax.text(j, i, target_dissimilarity_matrix[i, j],
-            #                       ha="center", va="center", color="w")
+                # Loop over data dimensions and create text annotations.
+                # for i in tnrange(len(candidate_ids)):
+                #    for j in range(len(candidate_ids)):
+                #        text = ax.text(j, i, target_dissimilarity_matrix[i, j],
+                #                       ha="center", va="center", color="w")
 
-            ax.set_title("Dissimilarity matrix (candidate group " + str(idx + 1) + ")")
-            dmfig.tight_layout()
-            dmfig.colorbar(im)
-            plt.savefig(group_channel_plots / "dissimilarity.png", facecolor='white')
-            fig = plt.gcf()
-            fig.clf()
-            plt.close()
+                ax.set_title("Dissimilarity matrix (candidate group " + str(idx + 1) + ")")
+                dmfig.tight_layout()
+                dmfig.colorbar(im)
+                plt.savefig(group_channel_plots / "dissimilarity.png", facecolor='white')
+                fig = plt.gcf()
+                fig.clf()
+                plt.close()
 
         signature_cadidate_ids = signature_traces.loc[signature_traces['IsSignature'] == True,'Candidate_ID'].unique()
 
@@ -547,7 +550,7 @@ def build_house_db(TARGET_HOUSE, DATASET):
 
     #Parallel(n_jobs=num_cores)(delayed(generate_channel_graphs)(channel, PLOTS) for channel in target_channels)
 
-    for channel in tqdm(target_channels, 'Channel Plots (' + house +')'):
+    for channel in tqdm(target_channels, 'Channel Plots (' + TARGET_HOUSE +')'):
         generate_channel_graphs(channel, PLOTS)
 
 
@@ -557,11 +560,15 @@ def build_house_db(TARGET_HOUSE, DATASET):
 
     #Parallel(n_jobs=num_cores)(delayed(process_single_channel)(TARGET_CHANNEL_NAME, channels[TARGET_CHANNEL_NAME], PLOTS) for TARGET_CHANNEL_NAME in target_channels)
 
-    for TARGET_CHANNEL_NAME in tqdm(target_channels, 'Channel Analyses (' + house +')'):
+    for TARGET_CHANNEL_NAME in tqdm(target_channels, 'Channel Analyses (' + TARGET_HOUSE +')'):
         process_single_channel(TARGET_CHANNEL_NAME, channels[TARGET_CHANNEL_NAME], PLOTS)
+
+import sys
 
 if __name__ == "__main__":
     #Parallel(n_jobs=num_cores)(delayed(build_house_db)(house, DATASET) for house in map(lambda p: p.name, DATASET.glob("*")))
-    houses = list(map(lambda p: p.name, DATASET.glob("*")))
-    for house in tqdm(houses, 'houses'):
-        build_house_db(house, DATASET)
+    #houses = list(map(lambda p: p.name, DATASET.glob("*")))
+    #for house in tqdm(houses, 'houses'):
+    #    build_house_db(house, DATASET)
+    print(sys.argv[1])
+    build_house_db(sys.argv[1], DATASET)
