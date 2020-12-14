@@ -236,5 +236,3 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/vscode,macos,linux,windows,jupyternotebooks,python
 
 !**/.gitkeep
-
-**/*.png
